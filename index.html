@@ -1,0 +1,578 @@
+<!--
+  Conversor de archivos EAD (XML) a CSV o Excel (XLSX) para ser importados a AtoM.
+  Incluye:
+  - Selección de niveles de descripción de acuerdo a cómo se usan en el Archivo General de la Nación (Argentina)
+  - Extracción de datos desde EAD 2002
+  - Conversión a CSV para su importación en AtoM. El template corresponde al requerido por la versión 2.8 de AtoM: https://www.accesstomemory.org/es/docs/2.8/user-manual/import-export/csv-import/
+  - Conversión a Excel para trabajar sobre el contenido de la descripción
+  - Previsualización HTML del resultado
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Conversor EAD a CSV</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <h1>Conversor de EAD 2002 XML a CSV</h1>
+
+    <!-- Selector de archivo XML -->
+  <input type="file" id="xmlFile" accept=".xml">
+
+  <div>
+  <!-- Selector de niveles de descripción existentes en el EAD -->
+    <h3>Seleccionar niveles de descripción:</h3>
+    <label><input type="checkbox" class="levelCheckbox" value="Colección" >Colección</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Fondo" >Fondo</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Subfondo" >Subfondo</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Sección" >Sección</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Serie" >Serie</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Subserie" >Subserie</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Unidad documental" >Unidad documental</label>
+    <label><input type="checkbox" class="levelCheckbox" value="Parte documental" >Parte documental</label>
+  </div>
+
+  <button onclick="previewCSV()">Previsualizar CSV</button>
+  <button onclick="convertXML()">Convertir a CSV</button>
+  <button onclick="convertToXLS()">Convertir a Excel</button>
+
+  <h3>Previsualización:</h3>
+  <!-- Contenedor donde se renderiza la tabla de previsualización -->
+  <div id="previewTable" style="max-height: 400px; overflow: auto; border: 1px solid #ccc;"></div>
+
+  <script>
+
+    // Encabezados de columnas necesarios para las descripciones a importar en en AtoM.
+    const headers = [
+      "legacyId", "parentId", "qubitParentSlug", "accessionNumber", "identifier", "title", "levelOfDescription",
+      "extentAndMedium", "repository", "archivalHistory", "acquisition", "scopeAndContent", "appraisal", "accruals",
+      "arrangement", "accessConditions", "reproductionConditions", "language", "script", "languageNote",
+      "physicalCharacteristics", "findingAids", "locationOfOriginals", "locationOfCopies", "relatedUnitsOfDescription",
+      "publicationNote", "digitalObjectURI", "digitalObjectChecksum", "generalNote", "subjectAccessPoints",
+      "placeAccessPoints", "nameAccessPoints", "genreAccessPoints", "descriptionIdentifier", "institutionIdentifier",
+      "rules", "descriptionStatus", "levelOfDetail", "revisionHistory", "languageOfDescription", "scriptOfDescription",
+      "sources", "archivistNote", "publicationStatus", "physicalObjectName", "physicalObjectLocation",
+      "physicalObjectType", "alternativeIdentifiers", "alternativeIdentifierLabels", "eventDates", "eventTypes",
+      "eventStartDates", "eventEndDates", "eventActors", "eventActorHistories", "culture"
+    ];
+    let rows = [];
+
+    // Mapeo de niveles EAD a nombres de niveles usados en el AGN.
+    const eadLevelToName = {
+      collection: "Colección",
+      fonds: "Fondo",
+      subfonds: "Subfondo",
+      series: "Serie",
+      subseries: "Subserie",
+      file: "Unidad documental",
+      item: "Parte documental"
+    };
+
+    // Mapeo de códigos de idioma ISO 639-2 (tal como se codifica en EAD) a ISO 639-1 (reconocido por AtoM)
+    const iso639_2_to_1 = {
+      "aar": "aa",
+      "abk": "ab",
+      "afr": "af",
+      "aka": "ak",
+      "amh": "am",
+      "ara": "ar",
+      "arg": "an",
+      "asm": "as",
+      "ava": "av",
+      "ave": "ae",
+      "aym": "ay",
+      "aze": "az",
+      "bak": "ba",
+      "bam": "bm",
+      "bel": "be",
+      "ben": "bn",
+      "bis": "bi",
+      "bod": "bo",
+      "tib": "bo",
+      "bos": "bs",
+      "bre": "br",
+      "bul": "bg",
+      "cat": "ca",
+      "ces": "cs",
+      "cze": "cs",
+      "cha": "ch",
+      "che": "ce",
+      "chu": "cu",
+      "chv": "cv",
+      "cor": "kw",
+      "cos": "co",
+      "cre": "cr",
+      "cym": "cy",
+      "wel": "cy",
+      "dan": "da",
+      "deu": "de",
+      "ger": "de",
+      "div": "dv",
+      "dzo": "dz",
+      "ell": "el",
+      "gre": "el",
+      "eng": "en",
+      "epo": "eo",
+      "est": "et",
+      "eus": "eu",
+      "baq": "eu",
+      "ewe": "ee",
+      "fao": "fo",
+      "fas": "fa",
+      "per": "fa",
+      "fij": "fj",
+      "fin": "fi",
+      "fra": "fr",
+      "fre": "fr",
+      "fry": "fy",
+      "ful": "ff",
+      "gla": "gd",
+      "gle": "ga",
+      "glg": "gl",
+      "glv": "gv",
+      "grn": "gn",
+      "guj": "gu",
+      "hat": "ht",
+      "hau": "ha",
+      "heb": "he",
+      "her": "hz",
+      "hin": "hi",
+      "hmo": "ho",
+      "hrv": "hr",
+      "hun": "hu",
+      "hye": "hy",
+      "arm": "hy",
+      "ibo": "ig",
+      "ido": "io",
+      "iii": "ii",
+      "iku": "iu",
+      "ile": "ie",
+      "ina": "ia",
+      "ind": "id",
+      "ipk": "ik",
+      "isl": "is",
+      "ice": "is",
+      "ita": "it",
+      "jav": "jv",
+      "jpn": "ja",
+      "kal": "kl",
+      "kan": "kn",
+      "kas": "ks",
+      "kat": "ka",
+      "geo": "ka",
+      "kau": "kr",
+      "kaz": "kk",
+      "khm": "km",
+      "kik": "ki",
+      "kin": "rw",
+      "kir": "ky",
+      "kom": "kv",
+      "kon": "kg",
+      "kor": "ko",
+      "kua": "kj",
+      "kur": "ku",
+      "lao": "lo",
+      "lat": "la",
+      "lav": "lv",
+      "lim": "li",
+      "lin": "ln",
+      "lit": "lt",
+      "ltz": "lb",
+      "lub": "lu",
+      "lug": "lg",
+      "mah": "mh",
+      "mal": "ml",
+      "mar": "mr",
+      "mkd": "mk",
+      "mac": "mk",
+      "mlg": "mg",
+      "mlt": "mt",
+      "mon": "mn",
+      "mri": "mi",
+      "mao": "mi",
+      "msa": "ms",
+      "may": "ms",
+      "mya": "my",
+      "bur": "my",
+      "nau": "na",
+      "nav": "nv",
+      "nbl": "nr",
+      "nde": "nd",
+      "ndo": "ng",
+      "nep": "ne",
+      "nld": "nl",
+      "dut": "nl",
+      "nno": "nn",
+      "nob": "nb",
+      "nor": "no",
+      "nya": "ny",
+      "oci": "oc",
+      "oji": "oj",
+      "ori": "or",
+      "orm": "om",
+      "oss": "os",
+      "pan": "pa",
+      "pli": "pi",
+      "pol": "pl",
+      "por": "pt",
+      "pus": "ps",
+      "que": "qu",
+      "roh": "rm",
+      "ron": "ro",
+      "rum": "ro",
+      "run": "rn",
+      "rus": "ru",
+      "sag": "sg",
+      "san": "sa",
+      "sin": "si",
+      "slk": "sk",
+      "slo": "sk",
+      "slv": "sl",
+      "sme": "se",
+      "smo": "sm",
+      "sna": "sn",
+      "snd": "sd",
+      "som": "so",
+      "sot": "st",
+      "spa": "es",
+      "sqi": "sq",
+      "alb": "sq",
+      "srd": "sc",
+      "srp": "sr",
+      "ssw": "ss",
+      "sun": "su",
+      "swa": "sw",
+      "swe": "sv",
+      "tah": "ty",
+      "tam": "ta",
+      "tat": "tt",
+      "tel": "te",
+      "tgk": "tg",
+      "tgl": "tl",
+      "tha": "th",
+      "tir": "ti",
+      "ton": "to",
+      "tsn": "tn",
+      "tso": "ts",
+      "tuk": "tk",
+      "tur": "tr",
+      "twi": "tw",
+      "uig": "ug",
+      "ukr": "uk",
+      "urd": "ur",
+      "uzb": "uz",
+      "ven": "ve",
+      "vie": "vi",
+      "vol": "vo",
+      "wln": "wa",
+      "wol": "wo",
+      "xho": "xh",
+      "yid": "yi",
+      "yor": "yo",
+      "zha": "za",
+      "zho": "zh",
+      "chi": "zh",
+      "zul": "zu"
+    };
+
+    // Devuelve una lista de los niveles seleccionados por el usuario
+  function getSelectedLevels() {
+      return Array.from(document.querySelectorAll(".levelCheckbox:checked")).map(cb => cb.value);
+    }
+
+    // Capitaliza la primera letra de una cadena
+  function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    // Determina el nombre del nivel informado en el EAD.
+    // Si no hay nombre o es "otherlevel", se determinará por el nivel de profundidad de anidamiento.
+    function getLevelNameFromNode(node, depth, levelNamesByDepth) {
+      const levelAttr = node.getAttribute("level")?.toLowerCase();
+      const otherLevel = node.getAttribute("otherlevel")?.trim();
+  
+      if (eadLevelToName[levelAttr]) {
+        return eadLevelToName[levelAttr];
+      }
+  
+      if (levelAttr === "otherlevel" && otherLevel) {
+        return capitalize(otherLevel);
+      }
+  
+      return levelNamesByDepth[depth] || "Desconocido";
+    }
+
+    // Extrae y transforma a CSV los datos relevantes de cada nodo del XML
+  function extractData(node) {
+      const getText = (tag) => {
+        const el = node.querySelector(tag);
+        if (!el) return "";
+  
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith("\n"));
+        return clone.textContent.trim();
+      };
+  
+      const getAttrFrom = (tag, attr) => {
+        const el = node.querySelector(tag);
+        return el ? el.getAttribute(attr) || "" : "";
+      };
+  
+      const getNoteByType = (type) => {
+        const note = node.querySelector(`note[type="${type}"]`);
+        return note ? note.textContent.trim() : "";
+      };
+  
+      const getOddByType = (type) => {
+        const odd = node.querySelector(`odd[type="${type}"]`);
+        return odd ? odd.textContent.trim() : "";
+      };
+  
+      const getDaoHref = () => {
+        const dao = node.querySelector("dao");
+        return dao ? dao.getAttribute("href") || "" : "";
+      };
+  
+      const getProcessDate = () => {
+        const date = node.querySelector("processinfo > p > date");
+        return date ? date.textContent.trim() : "";
+      };
+  
+      const getProcessText = () => {
+        const p = node.querySelector("processinfo > p");
+        return p ? p.textContent.trim() : "";
+      };
+  
+      // Obtener scriptcode de cualquier <language> (no sólo el primero).
+      // Se hace así para poder obtener 'language' y 'langcode'.
+      const getScript = () => {
+        const langWithScript = node.querySelector('language[scriptcode]');
+        return langWithScript ? langWithScript.getAttribute('scriptcode') || "" : "";
+      };
+  
+      // Usar mapa para convertir langcode de ISO 639-2 a ISO 639-1
+      const rawLang = getAttrFrom("language", "langcode");
+      const lang = iso639_2_to_1[rawLang] || rawLang;
+  
+      return {
+        legacyId: "",
+        parentId: "",
+        qubitParentSlug: "",
+        accessionNumber: "",
+        identifier: getText("unitid"),
+        title: getText("unittitle"),
+        levelOfDescription: "",
+        extentAndMedium: getText("physdesc"),
+        repository: node.querySelector("unitid[repositorycode='AGN']") ? "Archivo General de la Nación (Argentina)" : "",
+        archivalHistory: getText("custodhist"),
+        acquisition: getText("acqinfo"),
+        scopeAndContent: getText("scopecontent"),
+        appraisal: getText("appraisal"),
+        accruals: getText("accruals"),
+        arrangement: getText("arrangement"),
+        accessConditions: getText("accessrestrict"),
+        reproductionConditions: getText("userestrict"),
+        language: lang,
+        script: getScript(),
+        languageNote: "",
+        physicalCharacteristics: getText("phystech"),
+        findingAids: getText("otherfindaid"),
+        locationOfOriginals: getText("originalsloc"),
+        locationOfCopies: getText("altformavail"),
+        relatedUnitsOfDescription: getText("relatedmaterial"),
+        publicationNote: getText("bibliography"),
+        digitalObjectURI: getDaoHref(),
+        digitalObjectChecksum: "",
+        generalNote: getNoteByType("generalNote"),
+        subjectAccessPoints: getText("subject"),
+        placeAccessPoints: "",
+        nameAccessPoints: "",
+        genreAccessPoints: "",
+        descriptionIdentifier: getOddByType("descriptionIdentifier"),
+        institutionIdentifier: getOddByType("institutionIdentifier"),
+        rules: getText("descrules"),
+        descriptionStatus: getOddByType("statusDescription"),
+        levelOfDetail: getOddByType("levelOfDetail"),
+        revisionHistory: getProcessDate(),
+        languageOfDescription: "es",
+        scriptOfDescription: "Latn",
+        sources: getNoteByType("sourcesDescription"),
+        archivistNote: getProcessText(),
+        publicationStatus: getOddByType("publicationStatus"),
+        physicalObjectName: "",
+        physicalObjectLocation: "",
+        physicalObjectType: "",
+        alternativeIdentifiers: "",
+        alternativeIdentifierLabels: "",
+        eventDates: getText("unitdate"),
+        eventTypes: "",
+        eventStartDates: "",
+        eventEndDates: "",
+        eventActors: getText("persname"),
+        eventActorHistories: getText("bioghist"),
+        culture: "es"
+      };
+    }
+  
+    // Recorre recursivamente los nodos <c> hijos y arma la estructura de datos
+  function parseNode(node, parentId = "", depth = 0, levelNamesByDepth = []) {
+      const selectedLevels = getSelectedLevels();
+      const levelName = getLevelNameFromNode(node, depth, levelNamesByDepth);
+      const data = extractData(node);
+      data.levelOfDescription = levelName;
+      data.parentId = parentId;
+
+      if (selectedLevels.includes(levelName)) {
+        rows.push(data);
+        parentId = data.identifier || parentId;
+      }
+
+      // Incrementamos la profundidad para los hijos
+      const nextDepth = depth + 1;
+    
+      node.querySelectorAll(":scope > c").forEach(child => 
+        parseNode(child, parentId, nextDepth, levelNamesByDepth)
+      );
+
+    }
+
+    // Convierte el array de objetos en una tabla CSV válida para AtoM
+  function convertToCSV(rows) {
+      const csvContent = [headers.join(",")].concat(
+        rows.map(row => headers.map(field => `"${(row[field] || "").replace(/"/g, '""')}"`).join(","))
+      ).join("\n");
+
+      return csvContent;
+    }
+
+    // Carga el XML seleccionado por el usuario
+    function loadAndParseXML(callback) {
+      const fileInput = document.getElementById("xmlFile");
+      const file = fileInput.files[0];
+      if (!file) return alert("Seleccioná un archivo XML.");
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(e.target.result, "text/xml");
+        rows = [];
+
+        const selectedLevels = getSelectedLevels();
+        const levelNamesByDepth = {};
+        selectedLevels.forEach((level, idx) => {
+          levelNamesByDepth[idx] = level;
+        });
+
+        const archdesc = xml.querySelector("archdesc");
+        if (archdesc) {
+          const levelName = getLevelNameFromNode(archdesc, 0, levelNamesByDepth);
+          if (selectedLevels.includes(levelName)) {
+            const data = extractData(archdesc);
+            data.levelOfDescription = levelName;
+            data.parentId = "";
+            rows.push(data);
+          }
+
+          const dsc = archdesc.querySelector("dsc");
+          if (dsc) {
+            dsc.querySelectorAll(":scope > c").forEach(child =>
+              parseNode(child, rows[0]?.identifier || "", 1, levelNamesByDepth)
+            );
+          }
+        }
+
+        callback(xml);
+      };
+
+      reader.readAsText(file);
+    }
+
+    // Convierte el XML en un CSV descargable
+  function convertXML() {
+      loadAndParseXML(xml => {
+        const csv = convertToCSV(rows);
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const eadid = xml.querySelector("eadid")?.getAttribute("identifier") || "output";
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${eadid}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // Convierte el XML en un XLSX usando SheetJS
+  function convertToXLS() {
+      loadAndParseXML(xml => {
+        const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
+        const eadid = xml.querySelector("eadid")?.getAttribute("identifier") || "output";
+        XLSX.writeFile(workbook, `${eadid}.xlsx`);
+      });
+    }
+
+    // Genera una tabla HTML para la previsualización de los datos extraídos
+  function previewCSV() {
+      loadAndParseXML(xml => {
+        const previewDiv = document.getElementById("previewTable");
+        previewDiv.innerHTML = "";
+
+        const table = document.createElement("table");
+        table.style.borderCollapse = "collapse";
+        table.style.width = "100%";
+
+        const thead = document.createElement("thead");
+        const headerRow = document.createElement("tr");
+        headers.forEach(h => {
+          const th = document.createElement("th");
+          th.textContent = h;
+          th.style.border = "1px solid #ddd";
+          th.style.padding = "4px";
+          th.style.backgroundColor = "#f0f0f0";
+          th.style.minWidth = h === "title" ? "400px" : "150px";
+          headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        rows.forEach(row => {
+          const tr = document.createElement("tr");
+          headers.forEach(h => {
+            const td = document.createElement("td");
+            if (h === "title") {
+              td.textContent = row[h] || "";
+              td.style.minWidth = "400px";
+            } else {
+              const div = document.createElement("div");
+              div.textContent = row[h] || "";
+              div.style.display = "-webkit-box";
+              div.style.webkitBoxOrient = "vertical";
+              div.style.webkitLineClamp = "3";
+              div.style.overflow = "hidden";
+              div.style.textOverflow = "ellipsis";
+              div.style.lineHeight = "1.2em";
+              div.style.maxHeight = "3.6em";
+              div.style.wordBreak = "break-word";
+              td.appendChild(div);
+              td.style.minWidth = "150px";
+            }
+            td.style.border = "1px solid #ddd";
+            td.style.padding = "4px";
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        previewDiv.appendChild(table);
+      });
+    }
+  </script>
+</body>
+</html>
