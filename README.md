@@ -6,11 +6,13 @@ Diseñado en HTML para su utilización offline. La exportación a XLSX, sin emba
 
 ## Uso
 
-El programa fue desarrollado con la intención de generar respaldos y editar descripciones archivísticas del Archivo General de la Nación (Argentina) alojadas en AtoM. El flujo de trabajo previsto es: exportar los registros en formato EAD XML desde la interfaz de AtoM, convertirlos a CSV o XLSX para su edición utilizando este conversor, y luego importar el CSV actualizado en AtoM.
+El programa fue desarrollado con la intención de generar respaldos y editar descripciones archivísticas del Archivo General de la Nación (Argentina) alojadas en AtoM. El flujo de trabajo previsto es: exportar los registros en formato EAD 2002 XML desde la interfaz de AtoM, convertirlos a CSV o XLSX para su edición utilizando este conversor, y luego importar el CSV actualizado en AtoM.
 
 Debido a que el XML refleja la estructura jerárquica (de arriba a abajo) a partir de la descripción exportada en AtoM, y el AGN utiliza nombres de nivel que difieren del estándar definido en EAD, el usuario deberá seleccionar en la interfaz del conversor los nombres de nivel representados en el XML.
 
 El código infiere la jerarquía a partir del atributo `level` en el XML. Si el valor del atributo difiere del estándar ISAD, se inferirá la jerarquía a partir de la profundidad de anidamiento en la estructura del XML, mapeando los nombres de nivel seleccionados por el usuario.
+
+NOTA: si se convierte un EAD 2002 XML a XLSX para editar los registros, he desarrollado también un conversor XLSX a CSV para su importación en AtoM. Disponible en: https://github.com/nlpz404/conversor-excel-a-csv 
 
 ## Licencias
 
