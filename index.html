@@ -338,14 +338,22 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
   
       const getNoteByType = (type) => {
         const note = node.querySelector(`note[type="${type}"]`);
-        return note ? note.textContent.trim() : "";
+        if (!note) return "";
+    
+        const clone = note.cloneNode(true);
+        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith(document.createTextNode("\r\n")));
+        return clone.textContent.trim();
       };
   
       const getOddByType = (type) => {
         const odd = node.querySelector(`odd[type="${type}"]`);
-        return odd ? odd.textContent.trim() : "";
+        if (!odd) return "";
+      
+        const clone = odd.cloneNode(true);
+        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith(document.createTextNode("\r\n")));
+        return clone.textContent.trim();
       };
-  
+    
       const getDaoHref = () => {
         const dao = node.querySelector("dao");
         return dao ? dao.getAttribute("href") || "" : "";
