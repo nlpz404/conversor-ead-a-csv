@@ -302,7 +302,7 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
   function capitalize(str) {
       return str.charAt(0).toUpperCase() + str.slice(1);
     }
-
+    
     // Determina el nombre del nivel informado en el EAD.
     // Si no hay nombre o es "otherlevel", se determinará por el nivel de profundidad de anidamiento.
     function getLevelNameFromNode(node, depth, levelNamesByDepth) {
@@ -320,66 +320,57 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
       return levelNamesByDepth[depth] || "Desconocido";
     }
 
+    // traduce los saltos de línea del XML (<lb\>) a CSV (\n)
+    function getCleanedTextContent(node) {
+      if (!node) return "";
+      const clone = node.cloneNode(true);
+      clone.querySelectorAll("lb").forEach(lb =>
+        lb.replaceWith(document.createTextNode("\r\n"))
+      );
+      return clone.textContent.trim();
+    }
+
     // Extrae y transforma a CSV los datos relevantes de cada nodo del XML
-  function extractData(node) {
-      const getText = (tag) => {
-        const el = node.querySelector(tag);
-        if (!el) return "";
-  
-        const clone = el.cloneNode(true);
-        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith("\n"));
-        return clone.textContent.trim();
-      };
-  
+    function extractData(node) {
+      const getText = (tag) => getCleanedTextContent(node.querySelector(tag));
+    
       const getAttrFrom = (tag, attr) => {
         const el = node.querySelector(tag);
         return el ? el.getAttribute(attr) || "" : "";
       };
-  
-      const getNoteByType = (type) => {
-        const note = node.querySelector(`note[type="${type}"]`);
-        if (!note) return "";
     
-        const clone = note.cloneNode(true);
-        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith(document.createTextNode("\r\n")));
-        return clone.textContent.trim();
-      };
-  
-      const getOddByType = (type) => {
-        const odd = node.querySelector(`odd[type="${type}"]`);
-        if (!odd) return "";
-      
-        const clone = odd.cloneNode(true);
-        clone.querySelectorAll("lb").forEach(lb => lb.replaceWith(document.createTextNode("\r\n")));
-        return clone.textContent.trim();
-      };
+      const getNoteByType = (type) =>
+        getCleanedTextContent(node.querySelector(`note[type="${type}"]`));
+    
+      const getOddByType = (type) =>
+        getCleanedTextContent(node.querySelector(`odd[type="${type}"]`));
     
       const getDaoHref = () => {
         const dao = node.querySelector("dao");
         return dao ? dao.getAttribute("href") || "" : "";
       };
-  
+    
       const getProcessDate = () => {
         const date = node.querySelector("processinfo > p > date");
         return date ? date.textContent.trim() : "";
       };
-  
+    
       const getProcessText = () => {
         const p = node.querySelector("processinfo > p");
         return p ? p.textContent.trim() : "";
       };
-  
+
       // Obtener scriptcode de cualquier <language> (no sólo el primero).
       // Se hace así para poder obtener 'language' y 'langcode'.
       const getScript = () => {
         const langWithScript = node.querySelector('language[scriptcode]');
         return langWithScript ? langWithScript.getAttribute('scriptcode') || "" : "";
       };
-  
+
       // Usar mapa para convertir langcode de ISO 639-2 a ISO 639-1
       const rawLang = getAttrFrom("language", "langcode");
       const lang = iso639_2_to_1[rawLang] || rawLang;
-  
+    
       return {
         legacyId: "",
         parentId: "",
@@ -439,7 +430,7 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
         culture: "es"
       };
     }
-  
+
     // Recorre recursivamente los nodos <c> hijos y arma la estructura de datos
   function parseNode(node, parentId = "", depth = 0, levelNamesByDepth = []) {
       const selectedLevels = getSelectedLevels();
