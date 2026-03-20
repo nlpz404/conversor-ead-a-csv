@@ -145,10 +145,10 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
       const getOddByType = type => getCleanedTextContent(node.querySelector(`odd[type="${type}"]`));
 
       // Obtener ubicación del objeto digital. No se usa porque no se puede importar en AtoM.
-//      const getDaoHref = () => {
-//        const href = node.querySelector(":scope > did > dao")?.getAttribute("href") || "";
-//        return href.startsWith("//") ? href.replace(/^\/\//, "/") : href;
-//      };
+      const getDaoHref = () => {
+        const href = node.querySelector(":scope > did > dao")?.getAttribute("href") || "";
+        return href.startsWith("//") ? href.replace(/^\/\//, "/") : href;
+      };
 
       // Procesar processInfo ("Descripción creada...", fecha y archivista)
       const processInfos = Array.from(node.querySelectorAll("processinfo"));
@@ -197,7 +197,7 @@ Copyright (C) 2025  Nicolás López (malopez@mininterior.gob.ar)
         relatedUnitsOfDescription: getText("relatedmaterial"),
         publicationNote: getText("bibliography"),
         digitalObjectPath: "",
-        digitalObjectURI: "", // getDaoHref(),
+        digitalObjectURI: getDaoHref(), // "",
         generalNote: getNoteByType("generalNote"),
         subjectAccessPoints: getText("subject"),
         placeAccessPoints: "",
